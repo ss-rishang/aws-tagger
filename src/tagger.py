@@ -157,20 +157,22 @@ class CloudTrailTagger:
             logger.error(f"Error extracting with JMESPath: {e}")
             return []
 
-    def _format_creation_time(self, event_time) -> str:
-        """Format creation time from CloudTrail event"""
+    def _format_creation_time(
+        self, event_time, time_format: str = "%Y-%m-%d %H:%M:%S UTC"
+    ) -> str:
+        """Format creation time from CloudTrail event to a given format"""
         if not event_time:
             return None
 
         try:
             if isinstance(event_time, datetime):
-                return event_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+                return event_time.strftime(time_format)
             else:
                 # Parse ISO format from CloudTrail
                 parsed_time = datetime.fromisoformat(
                     str(event_time).replace("Z", "+00:00")
                 )
-                return parsed_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+                return parsed_time.strftime(time_format)
         except (ValueError, AttributeError) as e:
             logger.warning(f"Could not format creation time {event_time}: {e}")
             return str(event_time)

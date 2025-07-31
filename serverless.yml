@@ -44,6 +44,9 @@ provider:
             - 'bedrock:*Tag*'
             - 'sagemaker:*Tag*'
             - 'iam:*Tag*'
+            - 'efs:*Tag*'
+            - 'stepfunctions:*Tag*'
+            - 'opensearch:*Tag*'
           Resource: '*'
       managedPolicies:
         - arn:aws:iam::aws:policy/AWSCloudTrail_ReadOnlyAccess
@@ -54,6 +57,13 @@ package:
   exclude:
     - "test/**"
     - "tmp/**"
+    - "**/__pycache__/**"
+    - ".ruff_cache/**"
+    - ".pytest_cache/**"
+    - ".mypy_cache/**"
+    - ".vscode/**"
+    - ".env"
+    - ".env.*"
 
 functions:
   # A function

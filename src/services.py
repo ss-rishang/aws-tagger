@@ -374,182 +374,213 @@ def tag_resource(
 
         logger.debug(f"Tagging {resource_type}:{resource_id} with {len(tags)} tags")
 
-        # Tag based on event source - simple switch
-        if eventsource == "ec2":
-            clients["ec2"].create_tags(Resources=[resource_id], Tags=tags)
-        elif eventsource == "s3":
-            clients["s3"].put_bucket_tagging(
-                Bucket=resource_id, Tagging={"TagSet": tags}
-            )
-        elif eventsource == "rds":
-            # Handle both DB instances and clusters
-            if resource_type == "rds:cluster":
-                arn = f"arn:aws:rds:{clients['region']}:{clients['account_id']}:cluster:{resource_id}"
-            else:
-                arn = f"arn:aws:rds:{clients['region']}:{clients['account_id']}:db:{resource_id}"
-            clients["rds"].add_tags_to_resource(ResourceName=arn, Tags=tags)
-        elif eventsource == "lambda":
-            arn = f"arn:aws:lambda:{clients['region']}:{clients['account_id']}:function:{resource_id}"
-            clients["lambda"].tag_resource(
-                Resource=arn, Tags={tag["Key"]: tag["Value"] for tag in tags}
-            )
-        elif eventsource == "eks":
-            # EKS can be cluster or nodegroup
-            if resource_type == "eks:cluster":
-                arn = f"arn:aws:eks:{clients['region']}:{clients['account_id']}:cluster/{resource_id}"
-            elif resource_type == "eks:nodegroup":
-                # resource_id format: "cluster-name/nodegroup-name"
-                cluster_name, nodegroup_name = resource_id.split("/", 1)
-                arn = f"arn:aws:eks:{clients['region']}:{clients['account_id']}:nodegroup/{cluster_name}/{nodegroup_name}"
-            else:
-                arn = f"arn:aws:eks:{clients['region']}:{clients['account_id']}:cluster/{resource_id}"  # Fallback for other EKS resources
-            clients["eks"].tag_resource(
-                resourceArn=arn, tags={tag["Key"]: tag["Value"] for tag in tags}
-            )
-        elif eventsource == "elbv2":
-            # For ELB, resource_id is already the full ARN
-            clients["elbv2"].add_tags(ResourceArns=[resource_id], Tags=tags)
-        elif eventsource == "dynamodb":
-            clients["dynamodb"].tag_resource(
-                ResourceArn=f"arn:aws:dynamodb:{clients['region']}:{clients['account_id']}:table/{resource_id}",
-                Tags=tags,
-            )
-        elif eventsource == "kms":
-            # KMS uses key-value pairs
-            tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
-            clients["kms"].tag_resource(
-                KeyId=resource_id,
-                Tags=[{"TagKey": k, "TagValue": v} for k, v in tag_dict.items()],
-            )
-        elif eventsource == "secretsmanager":
-            # Secrets Manager expects ARN and key-value tags
-            tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
-            clients["secretsmanager"].tag_resource(
-                SecretId=resource_id,
-                Tags=[{"Key": k, "Value": v} for k, v in tag_dict.items()],
-            )
-        elif eventsource == "sns":
-            # SNS expects ARN and key-value tags
-            tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
-            clients["sns"].tag_resource(
-                ResourceArn=resource_id,
-                Tags=[{"Key": k, "Value": v} for k, v in tag_dict.items()],
-            )
-        elif eventsource == "sqs":
-            # SQS expects queue URL and key-value dict
-            tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
-            clients["sqs"].tag_queue(QueueUrl=resource_id, Tags=tag_dict)
-        elif eventsource == "cloudwatch":
-            if resource_type == "cloudwatch:loggroup":
-                tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
-                clients["cloudwatch-logs"].tag_log_group(
-                    logGroupName=resource_id, tags=tag_dict
+        # Tag based on event source - using match-case for cleaner code
+        match eventsource:
+            case "ec2":
+                clients["ec2"].create_tags(Resources=[resource_id], Tags=tags)
+
+            case "s3":
+                clients["s3"].put_bucket_tagging(
+                    Bucket=resource_id, Tagging={"TagSet": tags}
                 )
-            else:
+
+            case "rds":
+                # Handle both DB instances and clusters
+                if resource_type == "rds:cluster":
+                    arn = f"arn:aws:rds:{clients['region']}:{clients['account_id']}:cluster:{resource_id}"
+                else:
+                    arn = f"arn:aws:rds:{clients['region']}:{clients['account_id']}:db:{resource_id}"
+                clients["rds"].add_tags_to_resource(ResourceName=arn, Tags=tags)
+
+            case "lambda":
+                arn = f"arn:aws:lambda:{clients['region']}:{clients['account_id']}:function:{resource_id}"
+                clients["lambda"].tag_resource(
+                    Resource=arn, Tags={tag["Key"]: tag["Value"] for tag in tags}
+                )
+
+            case "eks":
+                # EKS can be cluster or nodegroup
+                if resource_type == "eks:cluster":
+                    arn = f"arn:aws:eks:{clients['region']}:{clients['account_id']}:cluster/{resource_id}"
+                elif resource_type == "eks:nodegroup":
+                    # resource_id format: "cluster-name/nodegroup-name"
+                    cluster_name, nodegroup_name = resource_id.split("/", 1)
+                    arn = f"arn:aws:eks:{clients['region']}:{clients['account_id']}:nodegroup/{cluster_name}/{nodegroup_name}"
+                else:
+                    arn = f"arn:aws:eks:{clients['region']}:{clients['account_id']}:cluster/{resource_id}"  # Fallback for other EKS resources
+                clients["eks"].tag_resource(
+                    resourceArn=arn, tags={tag["Key"]: tag["Value"] for tag in tags}
+                )
+
+            case "elbv2":
+                # For ELB, resource_id is already the full ARN
+                clients["elbv2"].add_tags(ResourceArns=[resource_id], Tags=tags)
+
+            case "dynamodb":
+                clients["dynamodb"].tag_resource(
+                    ResourceArn=f"arn:aws:dynamodb:{clients['region']}:{clients['account_id']}:table/{resource_id}",
+                    Tags=tags,
+                )
+
+            case "kms":
+                # KMS uses key-value pairs
                 tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
-                clients["cloudwatch"].tag_resource(
-                    ResourceARN=f"arn:aws:cloudwatch:{clients['region']}:{clients['account_id']}:alarm:{resource_id}",
+                clients["kms"].tag_resource(
+                    KeyId=resource_id,
+                    Tags=[{"TagKey": k, "TagValue": v} for k, v in tag_dict.items()],
+                )
+
+            case "secretsmanager":
+                # Secrets Manager expects ARN and key-value tags
+                tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
+                clients["secretsmanager"].tag_resource(
+                    SecretId=resource_id,
                     Tags=[{"Key": k, "Value": v} for k, v in tag_dict.items()],
                 )
-        elif eventsource == "route53":
-            # Route 53 uses resource ID and key-value tags
-            clients["route53"].change_tags_for_resource(
-                ResourceType="hostedzone",
-                ResourceId=resource_id.replace("/hostedzone/", ""),
-                AddTags=[{"Key": tag["Key"], "Value": tag["Value"]} for tag in tags],
-            )
-        elif eventsource == "apigateway":
-            # API Gateway uses resource ARN
-            tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
-            clients["apigateway"].tag_resource(
-                resourceArn=f"arn:aws:apigateway:{clients['region']}::/restapis/{resource_id}",
-                tags=tag_dict,
-            )
-        elif eventsource == "ecs":
-            # ECS expects ARN and key-value tags
-            if resource_type == "ecs:cluster":
-                cluster_arn = f"arn:aws:ecs:{clients['region']}:{clients['account_id']}:cluster/{resource_id}"
-            else:
-                cluster_arn = f"arn:aws:ecs:{clients['region']}:{clients['account_id']}:service/{resource_id}"
-            clients["ecs"].tag_resource(
-                resourceArn=cluster_arn,
-                tags=[{"key": tag["Key"], "value": tag["Value"]} for tag in tags],
-            )
-        elif eventsource == "ecr":
-            # ECR expects ARN and key-value tags
-            clients["ecr"].tag_resource(
-                resourceArn=f"arn:aws:ecr:{clients['region']}:{clients['account_id']}:repository/{resource_id}",
-                tags=[{"Key": tag["Key"], "Value": tag["Value"]} for tag in tags],
-            )
-        elif eventsource == "stepfunctions":
-            # Step Functions expects ARN
-            tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
-            clients["stepfunctions"].tag_resource(
-                resourceArn=resource_id,
-                tags=[{"key": k, "value": v} for k, v in tag_dict.items()],
-            )
-        elif eventsource == "cloudformation":
-            # CloudFormation expects stack name and key-value tags
-            clients["cloudformation"].update_stack(
-                StackName=resource_id,
-                Tags=[{"Key": tag["Key"], "Value": tag["Value"]} for tag in tags],
-                UsePreviousTemplate=True,
-            )
-        elif eventsource == "efs":
-            # EFS expects file system ID and key-value tags
-            clients["efs"].tag_resource(
-                ResourceId=resource_id,
-                Tags=[{"Key": tag["Key"], "Value": tag["Value"]} for tag in tags],
-            )
-        elif eventsource == "opensearch":
-            # OpenSearch expects domain ARN
-            clients["opensearch"].add_tags(
-                ARN=f"arn:aws:es:{clients['region']}:{clients['account_id']}:domain/{resource_id}",
-                TagList=[{"Key": tag["Key"], "Value": tag["Value"]} for tag in tags],
-            )
-        elif eventsource == "redshift":
-            # Redshift expects resource name and key-value tags
-            clients["redshift"].create_tags(
-                ResourceName=f"arn:aws:redshift:{clients['region']}:{clients['account_id']}:cluster:{resource_id}",
-                Tags=[{"Key": tag["Key"], "Value": tag["Value"]} for tag in tags],
-            )
-        elif eventsource == "cognito-idp":
-            # Cognito User Pool expects ARN
-            clients["cognito-idp"].tag_resource(
-                ResourceArn=f"arn:aws:cognito-idp:{clients['region']}:{clients['account_id']}:userpool/{resource_id}",
-                Tags={tag["Key"]: tag["Value"] for tag in tags},
-            )
-        elif eventsource == "cognito-identity":
-            # Cognito Identity Pool expects ARN
-            clients["cognito-identity"].tag_resource(
-                ResourceArn=f"arn:aws:cognito-identity:{clients['region']}:{clients['account_id']}:identitypool/{resource_id}",
-                Tags={tag["Key"]: tag["Value"] for tag in tags},
-            )
-        elif eventsource == "amplify":
-            # Amplify expects app ARN
-            clients["amplify"].tag_resource(
-                resourceArn=f"arn:aws:amplify:{clients['region']}:{clients['account_id']}:apps/{resource_id}",
-                tags={tag["Key"]: tag["Value"] for tag in tags},
-            )
-        elif eventsource == "glue":
-            # Glue expects ARN and key-value tags
-            if resource_type == "glue:database":
-                resource_arn = f"arn:aws:glue:{clients['region']}:{clients['account_id']}:database/{resource_id}"
-            else:
-                resource_arn = f"arn:aws:glue:{clients['region']}:{clients['account_id']}:table/{resource_id}"
-            clients["glue"].tag_resource(
-                ResourceArn=resource_arn,
-                TagsToAdd={tag["Key"]: tag["Value"] for tag in tags},
-            )
-        elif eventsource == "iam":
-            # IAM expects ARN and key-value tags
-            clients["iam"].tag_resource(
-                ResourceArn=resource_id,
-                Tags=[{"Key": tag["Key"], "Value": tag["Value"]} for tag in tags],
-            )
-        else:
-            logger.warning(f"Unsupported event source: {eventsource}")
-            return False
+
+            case "sns":
+                # SNS expects ARN and key-value tags
+                tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
+                clients["sns"].tag_resource(
+                    ResourceArn=resource_id,
+                    Tags=[{"Key": k, "Value": v} for k, v in tag_dict.items()],
+                )
+
+            case "sqs":
+                # SQS expects queue URL and key-value dict
+                tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
+                clients["sqs"].tag_queue(QueueUrl=resource_id, Tags=tag_dict)
+
+            case "cloudwatch":
+                if resource_type == "cloudwatch:loggroup":
+                    tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
+                    clients["cloudwatch-logs"].tag_log_group(
+                        logGroupName=resource_id, tags=tag_dict
+                    )
+                else:
+                    tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
+                    clients["cloudwatch"].tag_resource(
+                        ResourceARN=f"arn:aws:cloudwatch:{clients['region']}:{clients['account_id']}:alarm:{resource_id}",
+                        Tags=[{"Key": k, "Value": v} for k, v in tag_dict.items()],
+                    )
+
+            case "route53":
+                # Route 53 uses resource ID and key-value tags
+                clients["route53"].change_tags_for_resource(
+                    ResourceType="hostedzone",
+                    ResourceId=resource_id.replace("/hostedzone/", ""),
+                    AddTags=[
+                        {"Key": tag["Key"], "Value": tag["Value"]} for tag in tags
+                    ],
+                )
+
+            case "apigateway":
+                # API Gateway uses resource ARN
+                tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
+                clients["apigateway"].tag_resource(
+                    resourceArn=f"arn:aws:apigateway:{clients['region']}::/restapis/{resource_id}",
+                    tags=tag_dict,
+                )
+
+            case "ecs":
+                # ECS expects ARN and key-value tags
+                if resource_type == "ecs:cluster":
+                    cluster_arn = f"arn:aws:ecs:{clients['region']}:{clients['account_id']}:cluster/{resource_id}"
+                else:
+                    cluster_arn = f"arn:aws:ecs:{clients['region']}:{clients['account_id']}:service/{resource_id}"
+                clients["ecs"].tag_resource(
+                    resourceArn=cluster_arn,
+                    tags=[{"key": tag["Key"], "value": tag["Value"]} for tag in tags],
+                )
+
+            case "ecr":
+                # ECR expects ARN and key-value tags
+                clients["ecr"].tag_resource(
+                    resourceArn=f"arn:aws:ecr:{clients['region']}:{clients['account_id']}:repository/{resource_id}",
+                    tags=[{"Key": tag["Key"], "Value": tag["Value"]} for tag in tags],
+                )
+
+            case "stepfunctions":
+                # Step Functions expects ARN
+                tag_dict = {tag["Key"]: tag["Value"] for tag in tags}
+                clients["stepfunctions"].tag_resource(
+                    resourceArn=resource_id,
+                    tags=[{"key": k, "value": v} for k, v in tag_dict.items()],
+                )
+
+            case "cloudformation":
+                # CloudFormation expects stack name and key-value tags
+                clients["cloudformation"].update_stack(
+                    StackName=resource_id,
+                    Tags=[{"Key": tag["Key"], "Value": tag["Value"]} for tag in tags],
+                    UsePreviousTemplate=True,
+                )
+
+            case "efs":
+                # EFS expects file system ID and key-value tags
+                clients["efs"].tag_resource(
+                    ResourceId=resource_id,
+                    Tags=[{"Key": tag["Key"], "Value": tag["Value"]} for tag in tags],
+                )
+
+            case "opensearch":
+                # OpenSearch expects domain ARN
+                clients["opensearch"].add_tags(
+                    ARN=f"arn:aws:es:{clients['region']}:{clients['account_id']}:domain/{resource_id}",
+                    TagList=[
+                        {"Key": tag["Key"], "Value": tag["Value"]} for tag in tags
+                    ],
+                )
+
+            case "redshift":
+                # Redshift expects resource name and key-value tags
+                clients["redshift"].create_tags(
+                    ResourceName=f"arn:aws:redshift:{clients['region']}:{clients['account_id']}:cluster:{resource_id}",
+                    Tags=[{"Key": tag["Key"], "Value": tag["Value"]} for tag in tags],
+                )
+
+            case "cognito-idp":
+                # Cognito User Pool expects ARN
+                clients["cognito-idp"].tag_resource(
+                    ResourceArn=f"arn:aws:cognito-idp:{clients['region']}:{clients['account_id']}:userpool/{resource_id}",
+                    Tags={tag["Key"]: tag["Value"] for tag in tags},
+                )
+
+            case "cognito-identity":
+                # Cognito Identity Pool expects ARN
+                clients["cognito-identity"].tag_resource(
+                    ResourceArn=f"arn:aws:cognito-identity:{clients['region']}:{clients['account_id']}:identitypool/{resource_id}",
+                    Tags={tag["Key"]: tag["Value"] for tag in tags},
+                )
+
+            case "amplify":
+                # Amplify expects app ARN
+                clients["amplify"].tag_resource(
+                    resourceArn=f"arn:aws:amplify:{clients['region']}:{clients['account_id']}:apps/{resource_id}",
+                    tags={tag["Key"]: tag["Value"] for tag in tags},
+                )
+
+            case "glue":
+                # Glue expects ARN and key-value tags
+                if resource_type == "glue:database":
+                    resource_arn = f"arn:aws:glue:{clients['region']}:{clients['account_id']}:database/{resource_id}"
+                else:
+                    resource_arn = f"arn:aws:glue:{clients['region']}:{clients['account_id']}:table/{resource_id}"
+                clients["glue"].tag_resource(
+                    ResourceArn=resource_arn,
+                    TagsToAdd={tag["Key"]: tag["Value"] for tag in tags},
+                )
+
+            case "iam":
+                # IAM expects ARN and key-value tags
+                clients["iam"].tag_resource(
+                    ResourceArn=resource_id,
+                    Tags=[{"Key": tag["Key"], "Value": tag["Value"]} for tag in tags],
+                )
+
+            case _:
+                logger.warning(f"Unsupported event source: {eventsource}")
+                return False
 
         tag_summary = ", ".join([f"{tag['Key']}:{tag['Value']}" for tag in tags])
         logger.info(f"✅ Tagged {resource_type}:{resource_id} with [{tag_summary}]")
