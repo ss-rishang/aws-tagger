@@ -1,34 +1,18 @@
-"""AWS CloudTrail Resource Tagger Package"""
+"""
+AWS CloudTrail Resource Tagger v1 - Simplified and Clean
 
-from .tagger import CloudTrailResourceTagger, CloudTrailResourceTaggerBuilder
-from .trail import (
-    ResourceType,
-    EventExtractor,
-    EventExtractorFactory,
-    CreationEventManager
-)
-from .data import (
-    TaggingStats,
-    ResourceInfo,
-    EventProcessingResult,
-    ExtractorConfig,
-    CloudTrailEventSummary,
-    TaggingConfig
-)
-from .utils import logger
+This version uses JMESPath for clean resource extraction and
+is much simpler than the original complex implementation.
+"""
 
+from .tagger import CloudTrailTagger
+from .services import get_supported_events
+from .utils import logger, setup_logger
+
+__version__ = "1.0.0"
 __all__ = [
-    'CloudTrailResourceTagger',
-    'CloudTrailResourceTaggerBuilder', 
-    'CreationEventManager',
-    'ResourceType',
-    'EventExtractor',
-    'EventExtractorFactory',
-    'TaggingStats',
-    'ResourceInfo',
-    'EventProcessingResult',
-    'ExtractorConfig',
-    'CloudTrailEventSummary',
-    'TaggingConfig',
-    'logger'
+    "CloudTrailTagger",
+    "get_supported_events",
+    "logger",
+    "setup_logger",
 ]
